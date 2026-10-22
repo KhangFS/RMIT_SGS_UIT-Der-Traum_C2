@@ -42,13 +42,30 @@ export function createApi(role) {
       headers['Authorization'] = `Bearer ${tideToken}`;
     }
 
-    const response = await fetch(`${config.apiBase}${path}`, {
+    let response = await fetch(`${config.apiBase}${path}`, {
       method,
       headers,
       credentials: 'same-origin',
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
     });
+
+    if (response.status === 401 && tideToken) {
+      // Token hết hạn, xóa token cũ và lấy token mới từ TideCloak
+      tideToken = null;
+      if (typeof window !== 'undefined') localStorage.removeItem('tidecloak_token');
+      const freshToken = await ensureTideAuth();
+      if (freshToken) {
+        headers['Authorization'] = `Bearer ${freshToken}`;
+        response = await fetch(`${config.apiBase}${path}`, {
+          method,
+          headers,
+          credentials: 'same-origin',
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: AbortSignal.timeout(15000),
+        });
+      }
+    }
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
